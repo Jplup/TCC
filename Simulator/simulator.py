@@ -216,7 +216,7 @@ class Simulator:
             ax.set_ylabel('Y points')
             plt.show()
         if graph_type == 'surface':
-            plt.figure(figsize=(14,10))
+            #plt.figure(figsize=(14,10))
             fig, ax = plt.subplots(subplot_kw={"projection": "3d"})
             n = len(self.plane.points['x'])
             X = np.arange(0, n, 1)
@@ -230,7 +230,7 @@ class Simulator:
             ax.set_ylabel('Y points')
             ax.set_zlabel('Illuminance')
             fig.colorbar(surf, shrink=0.5, aspect=5)
-
+            
             plt.show()
 
     #animação do mapa de calor, variando o parametro de tempo dt

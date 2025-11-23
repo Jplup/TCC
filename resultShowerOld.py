@@ -1,63 +1,61 @@
 import json
 import numpy as np
 import matplotlib.pyplot as plt
-from mpl_toolkits.mplot3d import Axes3D
 
 with open("results.json") as fs: data=json.load(fs)
 
-'''for key,item in data.items():
-    print(key,"-> média:",sum(item)/len(item),"/ n itens:",len(item))'''
+'''
+def getStrFromIndex(key,i):
+    info=key.split("/")
+    return float(info[i].split("=")[1])
 
-# Carrega os dados
-with open("results.json") as fs:
-    data = json.load(fs)
+newData={}
+for key,item in data.items():
+    info=key.split("/")
+    simStr=""+info[0]
+    simStr+="/"+info[1]
+    simStr+="/"+info[2]
+    simStr+="/"+info[3]
+    simStr+="/"+info[4]
+    simStr+="/distance="+str(getStrFromIndex(key,5))
+    simStr+="/SNR="+str(-getStrFromIndex(key,6))
+    newData[simStr]=item
 
-# Listas de valores únicos de sig_amp e noise_amp em ordem crescente
-sig_amp_vals = sorted({float(str(key).split("/")[3].split("=")[1].replace("e-", "e-")) for key in data})
-noise_amp_vals = sorted({float(str(key).split("/")[4].split("=")[1].replace("e-", "e-")) for key in data})
+with open("results.json",'w') as fs: json.dump(newData,fs)
 
-# Mapear cada valor para um índice
-sig_amp_to_idx = {val: idx for idx, val in enumerate(sig_amp_vals)}
-noise_amp_to_idx = {val: idx for idx, val in enumerate(noise_amp_vals)}
+print("Resolveu")
+input()'''
+   
 
-# Arrays para plot
-X_idx, Y_idx, Z = [], [], []
+distances={}
+for key,item in data.items():
+    print("key:",key,"/ intem:",item)
+    info=key.split("/")
+    distance=float(info[5].split("=")[1])
+    snr=float(info[6].split("=")[1])
+    print("Distance:",distance,"/ SNR:",snr)
+    ber=sum(item)/len(item)
+    try:
+        distances[str(distance)]["s"].append(snr)
+        distances[str(distance)]["b"].append(ber)
+    except:
+        distances[str(distance)]={}
+        distances[str(distance)]["s"]=[snr]
+        distances[str(distance)]["b"]=[ber]
 
-for key, item in data.items():
-    sig_amp = float(str(key).split("/")[3].split("=")[1].replace("e-", "e-"))
-    noise_amp = float(str(key).split("/")[4].split("=")[1].replace("e-", "e-"))
-    z = sum(item)/len(item)
 
-    X_idx.append(sig_amp_to_idx[sig_amp])
-    Y_idx.append(noise_amp_to_idx[noise_amp])
-    Z.append(z)
-
-X_idx = np.array(X_idx)
-Y_idx = np.array(Y_idx)
-Z = np.array(Z)
-
-# Criar grade para plot_surface
-X_grid, Y_grid = np.meshgrid(range(len(sig_amp_vals)), range(len(noise_amp_vals)))
-Z_grid = np.zeros_like(X_grid, dtype=float)
-
-for xi, yi, zi in zip(X_idx, Y_idx, Z):
-    Z_grid[yi, xi] = zi  # preencher grid
-
-# Plota superfície
-fig = plt.figure()
-ax = fig.add_subplot(111, projection='3d')
-surf = ax.plot_surface(X_grid, Y_grid, Z_grid, cmap='viridis', edgecolor='k')
-
-# Ajusta ticks para mostrar valores reais
-ax.set_xticks(range(len(sig_amp_vals)))
-ax.set_xticklabels([f"{v:.0e}" for v in sig_amp_vals])
-ax.set_yticks(range(len(noise_amp_vals)))
-ax.set_yticklabels([f"{v:.0e}" for v in noise_amp_vals])
-
-ax.set_xlabel('Signal amplitude')
-ax.set_ylabel('Noise amplitude')
-ax.set_zlabel('Média')
-ax.set_title('Superfície 3D dos resultados')
-
-fig.colorbar(surf, shrink=0.5, aspect=5)
+print("distances:",distances)
+for key,item in distances.items():
+    xs=np.array(item["s"])
+    ys=np.array(item["b"])
+    order=np.argsort(xs)
+    x=xs[order]
+    y=ys[order]
+    plt.plot(x,y,label=key)
+plt.xlabel("SNR (dB)")
+plt.ylabel("BER")
+plt.legend()
+plt.grid("true")
 plt.show()
+
+

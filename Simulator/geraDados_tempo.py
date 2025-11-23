@@ -5,9 +5,11 @@ from simulator import Simulator
 scale_factor_x = 1.78
 scale_factor_y = 2.72
 scale_factor_z = 1.84
-# scale_factor_x = 3
-# scale_factor_y = 3
-# scale_factor_z = 3
+scale_factor_x = 3
+scale_factor_y = 4
+scale_factor_z = 2
+
+floorLevel=0.07
 
 # ==========================================================================================
 # Diretórios
@@ -32,10 +34,10 @@ ambient_sets = {
     'total_simulation_time': 0.2/50000,      #0.0036,      #None,
     'ambient': {
         'room_sizes': {'x': scale_factor_x * 1, 'y': scale_factor_y * 1, 'z': scale_factor_z * 1},
-        'floor_level': 0.073,
-        'divisions_number': 7,             # x = Disc - 1
+        'floor_level': floorLevel,
+        'divisions_number': 10,             # x = Disc - 1
         # 'divisions_number': {'x': 29, 'y': 9, 'z': 29},
-        'sample_frequency': 100e3,
+        'sample_frequency': 100e5,
         'walls_refletance': 0.00,
         'refletance_aperture': None,
         'walls': [
@@ -52,9 +54,9 @@ ambient_sets = {
             #{'x': 1.51, 'y': 2.37, 'z': 1.74},        # B 2.1kHz
             #{'x': 1.52, 'y': 0.36, 'z': 1.74},        # C 3.2kHz
             #{'x': 0.25, 'y': 0.36, 'z': 1.74}         # D 4.3kHz
-
-            {'x': 0.25, 'y': 0.39, 'z': 1.74}
             
+            {'x': 0.5, 'y': 0.5, 'z': 1.74} 
+
             ##Normal
             # {'x': scale_factor_x * 0.25, 'y': scale_factor_y * 0.25, 'z': scale_factor_z * 1},
             # {'x': scale_factor_x * 0.75, 'y': scale_factor_y * 0.25, 'z': scale_factor_z * 1},
@@ -123,5 +125,5 @@ for dt in results.keys():
             temporal_results[x][y].append(results[dt][x][y])
 
 # Salva em "temporal_results.json" os valores de iluminancia calculados
-with open("teste.json", 'w') as f:
+with open("temporalResults.json", 'w') as f:
     json.dump(temporal_results, f)
