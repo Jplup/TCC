@@ -1,11 +1,15 @@
 LTspice 24.1.10 for Windows
-Circuit: C:\Users\jpulu\OneDrive\Área de Trabalho\TCC\circuit_1.net
-Start Time: Sat Nov 22 09:09:39 2025
+Circuit: C:\Users\João Pedro\Desktop\VLC\circuit_1.net
+Start Time: Mon Nov 24 16:25:24 2025
 solver = Normal
-Maximum thread count: 12
+Maximum thread count: 8
 tnom = 27
 temp = 27
 method = modified trap
+trtol = 1
+CompressTranOnly = false
+Compress1stOrder = false
+Compress2ndOrder = false
 Direct Newton iteration failed to find .op point.  (Use ".option noopiter" to skip.)
 Starting Gmin stepping
 Gmin = 10
@@ -911,10 +915,10 @@ Gmin = 1.86004e-13
 Gmin = 0
 Gmin stepping succeeded in finding the operating point.
 
-Total elapsed time: 17.253 seconds.
+Total elapsed time: 14.453 seconds.
 
 Files loaded:
-C:\Users\jpulu\OneDrive\Área de Trabalho\TCC\circuit_1.net
-C:\Users\jpulu\AppData\Local\LTspice\lib\sub\LT1015.sub
-C:\Users\jpulu\AppData\Local\LTspice\lib\sub\UniversalOpAmp2.lib
+C:\Users\João Pedro\Desktop\VLC\circuit_1.net
+C:\Users\João Pedro\AppData\Local\LTspice\lib\sub\LT1015.sub
+C:\Users\João Pedro\AppData\Local\LTspice\lib\sub\UniversalOpAmp2.lib
 
