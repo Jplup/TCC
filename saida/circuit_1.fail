@@ -1,6 +1,0 @@
-LTspice 24.1.10 for Windows
-Circuit: C:\Users\João Pedro\Desktop\Modulador\saida\circuit_1.net
-Start Time: Tue Oct 14 16:50:20 2025
-C:\Users\João Pedro\Desktop\Modulador\saida\circuit_1.net(15): File "C:\Users\João Pedro\Desktop\Modulador\saida\testegenerate_1k.txt" not found.
-I1 N005 0 PWL file=testegenerate_1k.txt AC 1
-              ^^^^^^^^^^^^^^^^^^^^^^^^^

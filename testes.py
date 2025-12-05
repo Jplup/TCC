@@ -1,57 +1,49 @@
+import numpy as np
 import matplotlib.pyplot as plt
 import random
-import numpy as np
 
-def getRandom():
-    rng = np.random.default_rng()
-    numbers = rng.normal(loc=0.0, scale=1.0, size=1) 
-    n1=random.randint(0,100)/100
-    n2=random.randint(0,100)/100
-    return max(min(float((numbers+1)/2),1),0)
+def VPPMGenerator(bits,DC,noiseAmp):
+    ys=[] # vetor de amplitudes
+    T=1/50000 # período
+    ts=np.linspace(0,T*len(bits),1000*len(bits)) # vetor de tempos
+    # Para cada valor de tempo:
+    for t in ts:
+        # De acordo com o tempo, ve qual é o periodo do VPPM (vppmBin) e em qual ponto do período está 
+        remainder=t%T
+        vppmBin=t//T
+        # Vê na lista de dados, qual o dado desse bin
+        try: infoBit=bits[int(vppmBin)]
+        except: infoBit=bits[-1]
+        # Gera o ruído
+        noise=np.random.normal(0,noiseAmp)
+        amplitude=5
 
-nBins=10
-nTimes=1000
-db=1/nBins
-bins={}
-b=0
-for _ in range(nBins):
-    bins[str(round(b*nBins)/nBins)]=0
-    b+=db
-#print("Bins:",bins)
-for i in range(nTimes):
-    n=getRandom()
-    bin=(n//(1/nBins))/nBins
-    #print("n:",n,"bin:",bin)
-    bins[str(bin)]+=1
-    print(i)
-xs=[]
-ys=[]
-for k,v in bins.items():
-    xs.append(float(k))
-    ys.append(v)
+        # De acordo com o bit desse bin, calcula a amplitude de acordo com a porcentagem do período já 
+        #   foi percorrida, considerando o dutyCycle
+        if infoBit==0:
+            if remainder>T*DC: ys.append(noise)
+            else: ys.append(amplitude+noise)
+        else:
+            if remainder<T*(1-DC): ys.append(noise)
+            else: ys.append(amplitude+noise)
+    return ts,ys
 
-plt.plot(xs,ys)
+def NormalizeWave(wave):
+    minVal=min(wave)
+    amp=np.max(np.array(wave)-minVal)
+    return [(val-minVal)/amp for val in wave]
+
+ts,ys=VPPMGenerator([random.randint(0,1) for _ in range(10)],0.3,0.3)
+
+plt.plot(ts,NormalizeWave(ys))
 plt.show()
 
+def Pot(signal): return np.mean(np.array(signal)**2)
 
-# Roda o circuito
-'''
-ltspice_path=r"C:\Users\João Pedro\AppData\Local\Programs\ADI\LTspice\LTspice.exe"
-netlist_path=r"C:\Users\João Pedro\Desktop\Modulador\circuit.net"
-subprocess.run([ltspice_path,"-b",netlist_path],check=True)
-
-# Lê o arquivo .raw gerado e pega o sinal do comparador
-l=ltspice.Ltspice(os.path.join(os.getcwd(),"circuit.raw"))
-l.parse()
-
-# 4. pega dados
-t=l.get_time()
-vout=l.getData('V(v_tia)')
-
-plt.plot(time,[(a/amplitude)*3.3 for a in amp],label="Dados")
-plt.plot(t,[a-3.3 for a in vout],label="Comp")
+plt.figure()
+plt.plot([t*1000 for t in ts],ys,c='r')
 plt.grid("true")
-plt.xlabel("Time (s)")
+plt.title("Potência:"+str(Pot(ys)))
+plt.xlabel("Tempo (us)")
 plt.ylabel("Amplitude (A)")
-plt.legend()
-plt.show()'''
+plt.show()

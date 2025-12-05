@@ -6,7 +6,7 @@ scale_factor_x = 1.78
 scale_factor_y = 2.72
 scale_factor_z = 1.84
 scale_factor_x = 3
-scale_factor_y = 4
+scale_factor_y = 10
 scale_factor_z = 2
 
 floorLevel=0.07
@@ -35,7 +35,7 @@ ambient_sets = {
     'ambient': {
         'room_sizes': {'x': scale_factor_x * 1, 'y': scale_factor_y * 1, 'z': scale_factor_z * 1},
         'floor_level': floorLevel,
-        'divisions_number': 10,             # x = Disc - 1
+        'divisions_number': 16,             # x = Disc - 1
         # 'divisions_number': {'x': 29, 'y': 9, 'z': 29},
         'sample_frequency': 100e5,
         'walls_refletance': 0.00,
@@ -55,7 +55,7 @@ ambient_sets = {
             #{'x': 1.52, 'y': 0.36, 'z': 1.74},        # C 3.2kHz
             #{'x': 0.25, 'y': 0.36, 'z': 1.74}         # D 4.3kHz
             
-            {'x': 0.5, 'y': 0.5, 'z': 1.74} 
+            {'x': scale_factor_x/2.01, 'y': 1.334, 'z': 1.74} 
 
             ##Normal
             # {'x': scale_factor_x * 0.25, 'y': scale_factor_y * 0.25, 'z': scale_factor_z * 1},

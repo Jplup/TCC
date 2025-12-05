@@ -1,159 +1,207 @@
-import json
-import numpy as np
 import matplotlib.pyplot as plt
-
-'''with open("results.json") as fs: AllData=json.load(fs)
-
-SNRs={}
-
-for key,item in AllData.items():
-    params=dict(p.split("=") for p in key.split("/"))
-    SNR=params["SNR"]
-    try:
-        SNRs[SNR][key]=item
-    except:
-        SNRs[SNR]={key:item}'''
-
-
-import json
+import numpy as np
 import re
-import numpy as np
-import matplotlib.pyplot as plt
 from collections import defaultdict
-
-# -----------------------------------------------------
-# Carregar resultados
-# -----------------------------------------------------
-with open("results.json") as f:
-    data = json.load(f)
-
-# -----------------------------------------------------
-# Função pra extrair os parâmetros da chave
-# -----------------------------------------------------
-def parse_key(key):
-    params = {}
-    for part in key.split('/'):
-        if '=' in part:
-            k, v = part.split('=', 1)
-            try:
-                params[k] = float(v)
-            except ValueError:
-                params[k] = v
-    return params
-
-# -----------------------------------------------------
-# Organizar dados por noise_amp
-# -----------------------------------------------------
-groups = defaultdict(list)
-
-for key, ber_list in data.items():
-    params = parse_key(key)
-    if "X" not in params or "Y" not in params or "noise_amp" not in params:
-        continue
-    x = params["X"]
-    y = params["Y"]
-    noise_amp = params["noise_amp"]
-    ber_mean = np.mean(ber_list)
-    groups[noise_amp].append((x, y, ber_mean))
-
-# -----------------------------------------------------
-# Gerar heatmap pra cada noise_amp
-# -----------------------------------------------------
-for noise_amp, values in sorted(groups.items()):
-    xs = sorted(set([v[0] for v in values]))
-    ys = sorted(set([v[1] for v in values]))
-    
-    # Criar matriz Z (BER)
-    Z = np.zeros((len(ys), len(xs)))
-    for (x, y, ber) in values:
-        xi = xs.index(x)
-        yi = ys.index(y)
-        Z[yi, xi] = ber
-
-    # Plot
-    plt.figure(figsize=(6,5))
-    plt.imshow(Z, origin='lower', extent=[min(xs), max(xs), min(ys), max(ys)],
-               aspect='auto', cmap='plasma')
-    plt.colorbar(label='BER')
-    plt.title(f'Heatmap - noise_amp = {noise_amp:.2e}')
-    plt.xlabel('X position')
-    plt.ylabel('Y position')
-    plt.tight_layout()
-    plt.show()
-
-
 import json
-import numpy as np
-import matplotlib.pyplot as plt
-from collections import defaultdict
+import matplotlib.colors as mcolors
 from scipy.interpolate import griddata
+import math
 
-# -----------------------------------------------------
-# Carregar resultados
-# -----------------------------------------------------
-with open("results.json") as f:
-    data = json.load(f)
+with open("results.json") as fs: data_dict=json.load(fs)
 
-# -----------------------------------------------------
-# Função pra extrair os parâmetros da chave
-# -----------------------------------------------------
-def parse_key(key):
-    params = {}
-    for part in key.split('/'):
-        if '=' in part:
-            k, v = part.split('=', 1)
-            try:
-                params[k] = float(v)
-            except ValueError:
-                params[k] = v
-    return params
+'''plotdata={}
+for key,item in data_dict.items():
+    params=key.split("/")
+    amp=""
+    for param in params:
+        if "sig_amp" in param:
+            amp=(param.split("=")[1])
+            break
+    try:
+        plotdata[amp]+=1
+    except:
+        plotdata[amp]=1
 
-# -----------------------------------------------------
-# Organizar dados por noise_amp
-# -----------------------------------------------------
-groups = defaultdict(list)
+plt.figure()
+xs=[float(key) for key in plotdata]
+ys=[plotdata[key] for key in plotdata.keys()]
+plt.scatter(xs,ys)
+plt.show()'''
 
-for key, ber_list in data.items():
-    params = parse_key(key)
-    if "X" not in params or "Y" not in params or "noise_amp" not in params:
+
+# Regex para extrair parâmetros das keys
+pattern = r"dc=([0-9.]+).*?sig_amp=([0-9.e\-]+).*?noise_amp=([0-9.e\-]+)"
+
+# Organizar os dados por (noise, index ber)
+data_group = defaultdict(list)
+
+for key, ber_lists in data_dict.items():
+    match = re.search(pattern, key)
+    if not match:
         continue
-    x = params["X"]
-    y = params["Y"]
-    noise_amp = params["noise_amp"]
-    ber_mean = np.mean(ber_list)
-    groups[noise_amp].append((x, y, ber_mean))
 
-# -----------------------------------------------------
-# Gerar heatmap interpolado pra cada noise_amp
-# -----------------------------------------------------
-for noise_amp, values in sorted(groups.items()):
-    # Separar os pontos
-    xs = np.array([v[0] for v in values])
-    ys = np.array([v[1] for v in values])
-    zs = np.array([v[2] for v in values])
+    dc = float(match.group(1))
+    sig = float(match.group(2))
+    noise = float(match.group(3))
 
-    # Criar grade regular
-    xi = np.linspace(xs.min(), xs.max(), 100)
-    yi = np.linspace(ys.min(), ys.max(), 100)
-    XI, YI = np.meshgrid(xi, yi)
+    ber_lists = np.array(ber_lists)
+    ber_mean = ber_lists.mean(axis=0)  # média das 2 simulações
 
-    # Interpolação dos valores de BER
-    ZI = griddata((xs, ys), zs, (XI, YI), method='cubic')
+    for ber_idx in range(6):
+        data_group[(noise, ber_idx)].append((dc, sig, ber_mean[ber_idx]))
 
-    # Plot
-    plt.figure(figsize=(6,5))
-    plt.imshow(
-        ZI,
-        origin='lower',
-        extent=[xs.min(), xs.max(), ys.min(), ys.max()],
-        aspect='auto',
-        cmap='plasma'
-    )
-    plt.colorbar(label='BER')
-    plt.title(f'Interpolated Heatmap - noise_amp = {noise_amp:.2e}')
-    plt.xlabel('X position')
-    plt.ylabel('Y position')
-    plt.tight_layout()
-    plt.show()
+# Valores únicos de noise_amp
+noise_values = sorted({n for (n, _) in data_group.keys()})
+
+labelPerIndex=["Só filtro","PGA","SAT","Só filtro Trig","PGA Trig","SAT Trig"]
+
+def PlotConjunto_imshow_irregular(ber_idx, row=1, nrows=1, addTitle=""):
+    for i, noise in enumerate(noise_values):
+        ax = plt.subplot(nrows, len(noise_values), i+1+((row-1)*len(noise_values)))
+
+        points = data_group[(noise, ber_idx)]
+        if not points: continue
+
+        dc_vals = sorted(set(p[0] for p in points))
+        sig_vals = sorted(set(p[1] for p in points))
+
+        Z = np.zeros((len(sig_vals), len(dc_vals)))
+        for dc, sig, ber in points:
+            Z[sig_vals.index(sig), dc_vals.index(dc)] = ber
+        
+        sig_vals = sorted(set(p[1]*(10**6) for p in points))
+
+        im = ax.imshow(Z, origin="lower", aspect="auto",
+                       extent=[min(dc_vals), max(dc_vals),
+                               min(sig_vals), max(sig_vals)],
+                       vmin=0, vmax=1, cmap="plasma_r")
+
+        cmap = plt.get_cmap("plasma_r")
+        rgba = cmap(Z)
+        rgba[Z == 0] = (0, 1, 0, 1)
+        rgba[Z == 1] = (0, 0, 0, 1)
+        im.set_data(rgba)
+
+        plt.colorbar(im, ax=ax, label="BER")
+        ax.set_title(f"noise={noise*(10**6):.1e} uA / {addTitle}")
+        ax.set_xlabel("Duty-Cycle")
+        ax.set_ylabel("Sig amplitude (uA)")
+
+tipo=1
+def PlotConjunto(ber_idx,row=1,nrows=1,addTitle=""):
+    PlotConjunto_imshow_irregular(ber_idx,row,nrows,addTitle)
 
 
+def auto_grid(n):
+    """Define r,c dinamicamente conforme número de subplots necessários."""
+    # Regra automática baseada em ranges que você descreveu
+    if n <= 2: return (1, n)
+    if n <= 4: return (2, 2)
+    if n <= 6: return (2, 3)
+    if n <= 9: return (3, 3)
+    if n <= 12: return (3, 4)
+    if n <= 16: return (4, 4)
+
+    # Caso passe de 16: arranjo mais "quadrado" possível
+    r = int(np.ceil(np.sqrt(n)))
+    c = int(np.ceil(n / r))
+    return (r, c)
+
+
+def PlotLinhaPorNoise(idx_list=[0, 1, 2, 3, 4, 5]):
+    """
+    Novo modo de plot:
+    - idx_list define quais BER_idx serão plottados
+    - layout da figura é calculado automaticamente
+    """
+
+    for noise in noise_values:
+        # Extrair todos os DCs presentes nesse noise
+        all_dc = sorted(set(
+            p[0] for key in data_group
+            if key[0] == noise
+            for p in data_group[key]
+        ))
+
+        n = len(all_dc)
+        if n == 0:
+            print(f"Nenhum DC disponível para noise {noise:.1e}")
+            continue
+
+        r, c = auto_grid(n)
+        fig, axes = plt.subplots(r, c)
+        fig.suptitle(f"noise_amp = {noise*(10**6):.1e} uA", fontsize=16)
+
+        axes = np.array(axes).flatten()
+
+        for i, dc_val in enumerate(all_dc):
+            ax = axes[i]
+            ax.set_title(f"Duty-Cycle = {dc_val:.3g}")
+            ax.set_xlabel("Sig amplitude (uA)")
+            ax.set_ylabel("BER")
+            ax.set_ylim(0, 1)
+            ax.grid(alpha=0.3)
+
+            for ber_idx in idx_list:
+                points = data_group.get((noise, ber_idx), [])
+                pts = [(p[1], p[2]) for p in points if p[0] == dc_val]
+
+                if not pts:
+                    continue
+
+                pts = sorted(pts, key=lambda x: x[0])
+                sig = [p[0]*(10**6) for p in pts]
+                ber = [p[1] for p in pts]
+
+                ax.plot(sig, ber,
+                        marker="o", linewidth=1.3, markersize=4,
+                        label=labelPerIndex[ber_idx])
+
+            ax.legend(fontsize=7)
+
+        # Desativar espaços sobrando
+        for j in range(i+1, len(axes)):
+            axes[j].axis("off")
+
+    
+plt.figure()
+plt.suptitle("Só filtro")
+PlotConjunto(0,1,2)
+PlotConjunto(3,2,2,"Trig")
+plt.tight_layout()
+
+plt.figure()
+plt.suptitle("PGA")
+PlotConjunto(1,1,2)
+PlotConjunto(4,2,2,"Trig")
+plt.tight_layout()
+
+plt.figure()
+plt.suptitle("SAT")
+PlotConjunto(2,1,2)
+PlotConjunto(5,2,2,"Trig")
+plt.tight_layout()
+
+plt.show()
+
+plt.figure(constrained_layout=True)
+plt.suptitle("Untrig")
+PlotConjunto(0,1,3,"Filtro")
+PlotConjunto(1,2,3,"PGA")
+PlotConjunto(2,3,3,"SAT")
+
+plt.figure(constrained_layout=True)
+plt.suptitle("Trig")
+PlotConjunto(3,1,3,"Filtro")
+PlotConjunto(4,2,3,"PGA")
+PlotConjunto(5,3,3,"SAT")
+
+plt.show()
+
+PlotLinhaPorNoise()
+PlotLinhaPorNoise([0,1,2])
+PlotLinhaPorNoise([3,4,5])
+PlotLinhaPorNoise([0,3])
+PlotLinhaPorNoise([1,4])
+PlotLinhaPorNoise([2,5])
+plt.show()
