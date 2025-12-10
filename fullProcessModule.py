@@ -1,24 +1,43 @@
 import numpy as np
 import random
-import json
 import matplotlib.pyplot as plt
 from PyLTSpice import SimRunner, SpiceEditor, LTspice  
 import ltspice
 from pathlib import Path
+from LTSpiceCleaner import Clean
 
-def RunLTSpice(circuit,nodeNames,gainPGA=1,run=True):
+def RunLTSPiceFrFr(circuit,valueChanges):
+    asc_path = Path(__file__).parent / circuit
+
+    runner = SimRunner(simulator=LTspice)
+    editor = SpiceEditor(asc_path)
+
+    for label,value in valueChanges.items():
+        editor.set_component_value(label,str(value))
+
+    raw_path, log_path = runner.run_now(editor)
+    return raw_path
+
+def RunLTSpice(circuit,nodeNames,valueChanges:dict={},run:bool=True):
     if run:
-        asc_path = Path(__file__).parent / circuit
-
-        runner = SimRunner(simulator=LTspice)
-        editor = SpiceEditor(asc_path)
-
-        r1=10000*(gainPGA-1)
-        if r1<10: r1=10
-
-        editor.set_component_value("R_PGA",str(int(r1)))
-
-        raw_path, log_path = runner.run_now(editor)
+        try:
+            raw_path=RunLTSPiceFrFr(circuit,valueChanges)
+        except:
+            print("--------------------------First dint work--------------------------")
+            Clean()
+            try:
+                newValueChanges={key:val for key,val in valueChanges.items()}
+                newValueChanges["R_DEBUG"]="1m"
+                raw_path=RunLTSPiceFrFr(circuit,newValueChanges)
+            except:
+                print("--------------------------Second dint work--------------------------")
+                Clean()
+                try:
+                    newValueChanges={key:val for key,val in valueChanges.items()}
+                    newValueChanges["R_DEBUG"]="1"
+                    raw_path=RunLTSPiceFrFr(circuit,newValueChanges)
+                except:
+                    print("--------------------------Pau no seu cu piranha--------------------------")
     else: raw_path=circuit.split(".")[0]+"_1.raw"
 
     l = ltspice.Ltspice(raw_path)
@@ -122,7 +141,7 @@ class Module:
 
     # Gera a onda de sinal de corrente com dados VPPM
     @staticmethod
-    def VPPMGenerator(freq,bits,amp,noiseAmp,DC,numPointsPerPeriod,saveWave=False):
+    def VPPMGenerator(freq,bits,amp,noiseAmp,DC,numPointsPerPeriod):
         ys=[] # vetor de amplitudes
         T=1/freq # período
         ts=np.linspace(0,T*len(bits),numPointsPerPeriod*len(bits)) # vetor de tempos
@@ -146,12 +165,6 @@ class Module:
                 if remainder<T*(1-DC): ys.append(noise)
                 else: ys.append(amp+noise)
 
-        if saveWave:
-            # Save input to .txt
-            with open("fullCircuitInput.txt", "w") as f:
-                for t, v in zip(ts,ys):
-                    f.write(f"{t:.6e}\t{v:.6e}\n")
-
         return ts,ys
 
     # -------------------------------- Demodulação --------------------------------
@@ -166,7 +179,7 @@ class Module:
                 targetTime=((n/self.freq)+(p*(self.numBits+1))/self.freq)+(1/self.freq)
                 i=np.searchsorted(time,targetTime)
                 if i in interruptIndexes or i>=len(time): continue
-                interruptIndexes.append(i)            
+                interruptIndexes.append(i)
             interruptIndexesSuper.append(interruptIndexes)
         return interruptIndexesSuper
     
@@ -183,7 +196,7 @@ class Module:
                 previous=wave[i+inicialIndex]
                 current=wave[i+1+inicialIndex]
             except: return interruptIndexesSuper
-            if previous<0.5 and current>0.5 or current==0.5:
+            if previous<1.65 and current>1.65 or current==1.65:
                 firstInterrupt=i+inicialIndex
                 break
 
@@ -198,54 +211,8 @@ class Module:
             interruptIndexesSuper.append(interruptIndexes)
         return interruptIndexesSuper
 
-    # Funciona bem aqui na simulação mas não funcionaria em hardware
-    '''def GetInterruptIndexesTrig(self,time,wave):
-        inicialIndex=np.searchsorted(time,0.9/self.freq)
-        interruptIndexesSuper=[]
-        firstPacket=True
-        for _ in range(self.numPackets):
-            for i in range(int(len(wave)/self.numPackets)):
-                try:
-                    previous=wave[i+inicialIndex]
-                    current=wave[i+1+inicialIndex]
-                except: return interruptIndexesSuper
-                if previous<1.65 and current>1.65 or current==1.65:
-                    firstInterrupt=i+inicialIndex
-                    break
-            if not firstPacket:
-                # Caso o ultimo bit de um pacote for 1, como o primeiro do próximo é sempre 0,
-                #   isso causa uma seção continua de 3,3V entre um símbolo e outro sem ter a borda
-                #   de subida, então o algorítmo acima não vai detectar o início do símbolo e sim
-                #   o inicio do segundo bit do símbolo, então tem que fazer isso pra compensar:
-                print("FIT:",time[firstInterrupt])
-                print("Last:",time[interruptIndexes[-1]])
-                timeDiff=time[firstInterrupt]-time[interruptIndexes[-1]]
-                print("Diff:",timeDiff)
-                if timeDiff> 0.5/self.freq:
-                    firstInterrupt=interruptIndexes[-1]
-                    
-            firstPacket=False
-            timeOfFirstInterrupt=time[firstInterrupt]
-            interruptIndexes=[firstInterrupt]
-
-            for n in range(self.numBits+1):
-                targetTime=((n+1)/self.freq)+timeOfFirstInterrupt
-                i=np.searchsorted(time,targetTime)
-                iToAdd=i if i<len(time) else len(time)-1
-                if iToAdd in interruptIndexes or iToAdd>=len(wave): continue
-                interruptIndexes.append(iToAdd)            
-            interruptIndexesSuper.append(interruptIndexes)
-            inicialIndex=interruptIndexes[-1]
-        return interruptIndexesSuper'''
-    
-    @staticmethod
-    def NormalizeWave(wave):
-        minVal=min(wave)
-        amp=np.max(np.array(wave)-minVal)
-        return [(val-minVal)/amp for val in wave]
-
     # Faz a demodulação
-    def Demodulate2(self,time,wave,title="",indexesFunc=""):
+    def Demodulate(self,time,wave,title="",indexesFunc=""):
         if indexesFunc=="trig":
             try: sampleIndexes=self.GetInterruptIndexesTrig(time,wave) # Os indexes do vetor de tempo que contém transições de período
             except: return [[]]
@@ -271,7 +238,6 @@ class Module:
                 colorIndex+=1
                 if colorIndex>=len(colors): colorIndex=0
 
-        normalizedWave=self.NormalizeWave(wave)
 
         maxPrints=5
         #targetTimes=[]
@@ -299,11 +265,11 @@ class Module:
                     if i>=len(wave): i=len(wave)-1
 
                     if firstBitOfPacket:
-                        refSat=1 if normalizedWave[i]>0.5 else 0
+                        refSat=1 if wave[i]>1.65 else 0
                         refValues0.append(refSat)
                         refValuesUnsat.append(wave[i])
                     else:
-                        waveSat=1 if normalizedWave[i]>0.5 else 0
+                        waveSat=1 if wave[i]>1.65 else 0
                         waveSats.append(waveSat)
 
                         # Calculation for 0 correlation
@@ -350,12 +316,10 @@ class Module:
 
         return bits
     
-
     # Faz a demodulação
-    def Demodulate(self,time,wave,title="",indexesFunc=""):
-        normalizedWave=self.NormalizeWave(wave)
+    def Demodulate2(self,time,wave,title="",indexesFunc=""):
         if indexesFunc=="trig":
-            try: sampleIndexes=self.GetInterruptIndexesTrig(time,normalizedWave) # Os indexes do vetor de tempo que contém transições de período
+            try: sampleIndexes=self.GetInterruptIndexesTrig(time,wave) # Os indexes do vetor de tempo que contém transições de período
             except: return [[]]
         else: sampleIndexes=self.GetInterruptPoints(time)
         bits=[]
@@ -417,11 +381,11 @@ class Module:
                     if i>=len(wave): i=len(wave)-1
 
                     if firstBitOfPacket:
-                        refSat=1 if normalizedWave[i]>0.5 else 0
+                        refSat=1 if wave[i]>1.65 else 0
                         refValues0.append(refSat)
                         refValuesUnsat.append(wave[i])
                     else:
-                        waveSat=1 if normalizedWave[i]>0.5 else 0
+                        waveSat=1 if wave[i]>1.65 else 0
                         waveSats.append(waveSat)
 
                         # Calculation for 0 correlation
@@ -480,12 +444,6 @@ class Module:
         simStr+="/Y="+str(self.Y)
 
         return simStr
-    
-    @staticmethod
-    def NormalizeWave(wave):
-        minValue=min(wave)
-        maxLoweredValue=max([a-minValue for a in wave])
-        return [(a-minValue)/maxLoweredValue for a in wave]
 
     @staticmethod
     def RoundJP(string,decimalPlaces=2):
@@ -505,21 +463,33 @@ class Module:
         return errors/(len(self.dataBits))
 
     
-    def Run(self,circuit,nodes,alsoTrig=True,dataType=3):
+    def Run(self,circuit,nodes,trigger=0,valueChanges:dict={},aditionalNoises=[]):
         '''
         dataType = Se os dados gerados devem ser 0101...(1) ou 00110011...(2) ou random(3)
         '''
 
         # Create input wave
-        self.GenerateData(dataType)
-        ts,ys=self.VPPMGenerator(self.freq,self.inputData,self.amp,self.noiseAmp,self.dutyCycle,self.numPointsPerPeriod,True)
+        self.GenerateData(3)
+        ts,ys=self.VPPMGenerator(self.freq,self.inputData,self.amp,self.noiseAmp,self.dutyCycle,self.numPointsPerPeriod)
         self.inputTime=ts
         self.inputWave=ys
+
+        for aditionalNoise in aditionalNoises:
+            for i in range(len(self.inputWave)):
+                self.inputWave[i]+=aditionalNoise[i]
+
+            
+        if True:
+            # Save input to .txt
+            with open("fullCircuitInput.txt", "w") as f:
+                for t, v in zip(self.inputTime,self.inputWave):
+                    f.write(f"{t:.6e}\t{v:.6e}\n")
+
         if debugLog:
             plt.figure()
-            plt.plot([t*1000 for t in ts],ys,c='r')
-            maxAmp=max(ys)
-            minAmp=min(ys)
+            plt.plot([t*1000 for t in self.inputTime],self.inputWave,c='r')
+            maxAmp=max(self.inputWave)
+            minAmp=min(self.inputWave)
             dA=maxAmp-minAmp
             for n in range((self.numBits+1)*self.numPackets+2):
                 periodTransition=n*1000/self.freq
@@ -528,14 +498,15 @@ class Module:
             plt.title("Onda de corrente gerada")
             plt.xlabel("Tempo (us)")
             plt.ylabel("Amplitude (A)")
+        plt.show()
         # Cria uma versão da onda de entrada 
         self.pureTs,self.pureYs=self.VPPMGenerator(self.freq,self.inputData,self.amp,0,self.dutyCycle,self.numPointsPerPeriod)
 
 
         # Run LTSpice
         if debugLog: print("Running LTSpice")
-        gain=2**np.ceil(np.log2(1.4/(self.amp*700000)))
-        outputWaves=RunLTSpice(circuit,nodes,gain)
+        outputWaves=RunLTSpice(circuit,nodes,valueChanges,True)
+
 
         # Get only data bits
         dataBits=[]
@@ -550,13 +521,22 @@ class Module:
         errors={}
         for node in nodes:
             wave=outputWaves[node]
-            result=self.Demodulate(time,wave,node,"")
-            BER=self.BER(result)
-            errors[node]=BER
-            if alsoTrig:
+            if trigger==0:
+                result=self.Demodulate(time,wave,node,"")
+                BER=self.BER(result)
+                errors[node]=BER
+            elif trigger==1:
                 resultTrig=self.Demodulate(time,wave,node+" trig","trig")
                 BERtrig=self.BER(resultTrig)
                 errors[node+"_Trig"]=BERtrig
+            else:
+                result=self.Demodulate(time,wave,node,"")
+                BER=self.BER(result)
+                errors[node]=BER
+                resultTrig=self.Demodulate(time,wave,node+" trig","trig")
+                BERtrig=self.BER(resultTrig)
+                errors[node+"_Trig"]=BERtrig
+            
         
         # Print results
         if debugLog:

@@ -2,16 +2,16 @@ from fullProcessModule import Module
 import numpy as np
 import json
 import time
-import os
+from LTSpiceCleaner import Clean
 
 debugLog=False
 
 # Parametros do sistema
 VPPMfreq=50000 # Frequência do sinal VPPM
-numBits=1000 # Quantos bits de informação no sinal
+numBits=100 # Quantos bits de informação no sinal
 numPointsPerPeriod=100 # Número de pontos gerados por período
 numSamples=10 # Número de samples em cada período
-noiseExtremes=[1e-8,1e-7] # Valores máximo e minimo de amplitude de ruído
+noiseExtremes=[1e-8,1e-6] # Valores máximo e minimo de amplitude de ruído
 numNoises=3 # Quantos valores diferentes de ruído serão simulados
 noises=np.linspace(noiseExtremes[0],noiseExtremes[1],numNoises) # Vetor de valores de ruído
 DCExtremes=[0.2,0.8] # Valores máximo e minimo de duty-cycle
@@ -21,7 +21,7 @@ numRepetitions=1 # Quantas vezes serão repetidos os mesmos parâmetros com dado
 numPackets=1
 
 # Load os dados do simulador
-with open("Simulator\luxResults.json") as fs: simData=json.load(fs)
+with open("Simulator/luxResults.json") as fs: simData=json.load(fs)
 
 # Total simulation time info
 xLen=len(list(simData.keys())) # Quantos valores diferentes em x serão simulados
@@ -42,36 +42,24 @@ def format_time(seconds):
 #   esse contador que exclui todos os arquivos de dados do LTSpice depois de um certo número de iterações.
 #   Isso concerta o problema
 countToDeletion=0
-
 dt=1 # Quanto tempo passou entre o começo e o final da última simulação
 cont=0 # Contador de simulações para prever quanto tempo vai demorar para a acabar
 
-circuit="circuitR.asc"
-resultDir="resultados.json"
-
-circuitName=circuit.split(".")[0]
-sufixes=[".raw",".op.raw",".net",".log",".fail"]
-deletionPaths=[]
-for sufix in sufixes:
-    deletionPaths.append(circuitName+sufix)
-    deletionPaths.append(circuitName+"_1"+sufix)
+circuit="circuit_filter.asc"
+resultDir="LTSpiceSimResults/filterXtia.json"
 maxSimsBeforeDeletion=3
-
-'''for path in deletionPaths:
-    if os.path.exists(path):
-        os.remove(path)
-input("Removeu as coisas")'''
-
 nodes=[
-    "V(comp_pga)",
-    "V(comp_real)",
-    "V(filtered)",
-    "V(tia)"
+    "V(comp_filter)",
+    "V(comp_tia)"
 ]
+trigger=2
 
-'''obj=Module(VPPMfreq,20,numPointsPerPeriod,numSamples,0.5,1,1,lucy,[-1,0])
-obj.Run(circuit,nodes,False)
-input("Teste")'''
+'''obj=Module(VPPMfreq,1000,numPointsPerPeriod,numSamples,0.2,1,1,17.29,[-1,0])
+ts=obj.inputTime
+sunLux=[1600*(75*(10**-9)) for _ in range(len(ts))]
+simStr,errors=obj.Run(circuit,nodes,2)
+print("Erros:",errors)
+input()'''
 
 for X_Distance in simData.keys():
     for Y_Distance in simData[list(simData.keys())[0]].keys():
@@ -90,35 +78,34 @@ for X_Distance in simData.keys():
                     except: num=0
                     if debugLog:
                         print("Foram feitas",num,"simulações com os parametros da key:",key)
+                    
+                    # Print de progresso total
+                    if not debugLog:
+                        percent=round((100*cont)/totalNum,4)
+                        timeToFinish=dt*(totalNum-cont)
+                        print(percent,"% / Time to finish:",format_time(timeToFinish),"key runnig:",obj.GetDictKey())
+                        cont+=1
 
                     # Se não foram feitas simulações o suficiente, é feita mais uma simulação
                     if num<numRepetitions:
-                        gain=2**np.ceil(np.log2(1.4/(obj.amp*700000)))
-                        r1=10000*(gain-1)
-                        if r1<10: r1=10
                         # Full process run
-                        simStr,errors=obj.Run(circuit,nodes,True,3,{"R_PGA":int(r1)})
+                        simStr,errors=obj.Run(circuit,nodes,trigger)
                         # Save results
                         with open(resultDir) as fs: oldResults=json.load(fs)
                         try: oldResults[simStr].append(errors)
                         except: oldResults[simStr]=[errors]
                         with open(resultDir,'w') as fs: json.dump(oldResults,fs)
                         if debugLog: print("Resultados salvos")
+                        print("Erros:",[errors])
+                        countToDeletion+=1
                     else:
                         if debugLog: print("Skiped")
 
-                    # Print de progresso total
                     if not debugLog:
-                        percent=round((100*cont)/totalNum,4)
-                        timeToFinish=dt*(totalNum-cont)
-                        print(percent,"% / Time to finish:",format_time(timeToFinish),"key saved:",obj.GetDictKey())
-                        cont+=1
+                        print("Saved")
 
                     # Deleta os arquivos de info do LTSpice caso o contador chegue no limite
-                    countToDeletion+=1
                     if countToDeletion>maxSimsBeforeDeletion:
                         countToDeletion=0
-                        for path in deletionPaths:
-                            if os.path.exists(path):
-                                os.remove(path)
+                        Clean()
                     dt=time.time()-t0
