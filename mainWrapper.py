@@ -4,7 +4,7 @@ from LTSpiceCleaner import Clean
 
 Clean()
 
-script="mainOnlyTIA.py"
+script="mainFilterXtia.py"
 
 while True:
     print("\n==============================")

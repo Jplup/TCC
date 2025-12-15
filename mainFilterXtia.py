@@ -8,12 +8,13 @@ debugLog=False
 
 # Parametros do sistema
 VPPMfreq=50000 # Frequência do sinal VPPM
-numBits=100 # Quantos bits de informação no sinal
+numBits=1000 # Quantos bits de informação no sinal
 numPointsPerPeriod=100 # Número de pontos gerados por período
 numSamples=10 # Número de samples em cada período
-noiseExtremes=[1e-8,1e-6] # Valores máximo e minimo de amplitude de ruído
-numNoises=3 # Quantos valores diferentes de ruído serão simulados
+noiseExtremes=[1e-8,1e-7] # Valores máximo e minimo de amplitude de ruído
+numNoises=2 # Quantos valores diferentes de ruído serão simulados
 noises=np.linspace(noiseExtremes[0],noiseExtremes[1],numNoises) # Vetor de valores de ruído
+noises=[1e-8,1e-7,5e-7]
 DCExtremes=[0.2,0.8] # Valores máximo e minimo de duty-cycle
 numDC=3 # Quantos valores diferentes de duty-cycle serão simulados
 DCs=np.linspace(DCExtremes[0],DCExtremes[1],numDC) # Vetor de valores de duty-cycle
@@ -22,13 +23,16 @@ numPackets=1
 
 # Load os dados do simulador
 with open("Simulator/luxResults.json") as fs: simData=json.load(fs)
+with open("Simulator/luxResultsVPPM2.json") as fs: vppm2=json.load(fs)
+with open("Simulator/luxResultsILU_CSE.json") as fs: ilu1=json.load(fs)
+with open("Simulator/luxResultsILU_CSD.json") as fs: ilu2=json.load(fs)
 
 # Total simulation time info
 xLen=len(list(simData.keys())) # Quantos valores diferentes em x serão simulados
 yLen=len(list(simData[list(simData.keys())[0]].keys())) # Quantos valores diferentes em y serão simulados
 print("Valores de X distintos:",xLen)
 print("Valores de Y distintos:",yLen)
-totalNum=xLen*yLen*numNoises*numRepetitions*numDC*numPackets # Número total de simulações
+totalNum=xLen*yLen*len(noises)*numRepetitions*len(DCs)*numPackets # Número total de simulações
 print("Número total de simulações:",totalNum)
 
 # Transforma segundos para o formato: x horas y minutos z segundos (ChatGPT)
@@ -38,6 +42,30 @@ def format_time(seconds):
     s = int(seconds % 60)
     return f"{h}h {m}m {s}s"
 
+def GenerateOtherWaves(X,Y,obj:Module):
+    luxAmp=75*(10**(-9))
+
+    # VPPM lum
+    #vppm2Lux=vppm2[X][Y]
+    #tsss,vppm2Wave,poewr=obj.VPPMGenerator(100000,obj.GenerateData(),vppm2Lux*luxAmp,0.5,obj.numPointsPerPeriod)
+
+    tss=np.array(obj.inputTime)
+    # Ilu 1
+    ilu1Amp=ilu1[X][Y]*luxAmp
+    faseOffset=np.random.randint(-100,100)/100
+    ilu1Wave=np.abs(np.sin(tss*2*np.pi*60+faseOffset)*ilu1Amp)
+
+    # Ilu 2
+    ilu2Amp=ilu2[X][Y]*luxAmp
+    faseOffset=np.random.randint(-100,100)/100
+    ilu2Wave=np.abs(np.sin(tss*2*np.pi*60+faseOffset)*ilu2Amp)
+
+    # Ilu 3
+    ilu3Amp=vppm2[X][Y]*luxAmp
+    faseOffset=np.random.randint(-100,100)/100
+    ilu3Wave=np.abs(np.sin(tss*2*np.pi*60+faseOffset)*ilu3Amp)
+    return [ilu1Wave,ilu2Wave,ilu3Wave]
+
 # Percebi que se deixar o script rodando por muito tempo alguma coisa para de funcionar, então criei
 #   esse contador que exclui todos os arquivos de dados do LTSpice depois de um certo número de iterações.
 #   Isso concerta o problema
@@ -46,26 +74,26 @@ dt=1 # Quanto tempo passou entre o começo e o final da última simulação
 cont=0 # Contador de simulações para prever quanto tempo vai demorar para a acabar
 
 circuit="circuit_filter.asc"
-resultDir="LTSpiceSimResults/filterXtia.json"
-maxSimsBeforeDeletion=3
+resultDir="LTSpiceSimResults/filterXtiaN2.json"
+maxSimsBeforeDeletion=1
 nodes=[
     "V(comp_filter)",
     "V(comp_tia)"
 ]
 trigger=2
 
-'''obj=Module(VPPMfreq,1000,numPointsPerPeriod,numSamples,0.2,1,1,17.29,[-1,0])
-ts=obj.inputTime
-sunLux=[1600*(75*(10**-9)) for _ in range(len(ts))]
-simStr,errors=obj.Run(circuit,nodes,2)
-print("Erros:",errors)
+'''obj=Module(VPPMfreq,1000,numPointsPerPeriod,numSamples,0.2,0,0,17.5,[-1,1e-8])
+obj.GenerateInput()
+addicionalNoises=GenerateOtherWaves("0.0","0.0",obj)
+simStr,errors,SNR=obj.Run(circuit,nodes,trigger,{},addicionalNoises)
+#print("Erros:",errors)
 input()'''
 
-for X_Distance in simData.keys():
-    for Y_Distance in simData[list(simData.keys())[0]].keys():
-        lux=simData[X_Distance][Y_Distance]
-        if debugLog: print("X:",X_Distance,"Y:",Y_Distance," -> ",lux)
-        for noiseAmp in noises:
+for noiseAmp in noises:
+    for X_Distance in simData.keys():
+        for Y_Distance in simData[list(simData.keys())[0]].keys():
+            lux=simData[X_Distance][Y_Distance]
+            if debugLog: print("X:",X_Distance,"Y:",Y_Distance," -> ",lux)
             for dc in DCs:
                 for n in range(numRepetitions):
                     t0=time.time()
@@ -89,7 +117,10 @@ for X_Distance in simData.keys():
                     # Se não foram feitas simulações o suficiente, é feita mais uma simulação
                     if num<numRepetitions:
                         # Full process run
-                        simStr,errors=obj.Run(circuit,nodes,trigger)
+                        obj.GenerateInput()
+                        addicionalNoises=GenerateOtherWaves(X_Distance,Y_Distance,obj)
+                        simStr,errors,SNR=obj.Run(circuit,nodes,trigger,{},addicionalNoises)
+                        errors["SNR"]=SNR
                         # Save results
                         with open(resultDir) as fs: oldResults=json.load(fs)
                         try: oldResults[simStr].append(errors)

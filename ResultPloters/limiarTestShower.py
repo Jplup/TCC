@@ -3,7 +3,7 @@ import json
 import numpy as np
 from matplotlib import cm
 
-with open("limiarTest.json") as fs: dataRaw=json.load(fs)
+with open("LTSpiceSimResults/limiarTest.json") as fs: dataRaw=json.load(fs)
 
 def extract(key, field):
     return key.split(field + "=")[1].split("/")[0]
@@ -29,7 +29,7 @@ for suu in ["","_Trig"]:
     for X_Distance in data.keys():
         X.append(float(X_Distance))
     for Y_Distance in data[list(data.keys())[0]].keys():
-        Y.append(float(Y_Distance))
+        Y.append(float(Y_Distance)*1000)
 
     Z = np.zeros((len(Y),len(X)))
 
@@ -46,12 +46,12 @@ for suu in ["","_Trig"]:
         Z,
         origin='lower',
         extent=[min(X), max(X), min(Y), max(Y)],
-        aspect='auto'
+        aspect='auto',cmap="RdYlGn_r"
     )
 
-    plt.colorbar(label="Z")
-    plt.xlabel("X")
-    plt.ylabel("Y")
-    plt.title("Heatmap (sem interpolação)"+suu)
+    plt.colorbar(label="BER")
+    plt.xlabel("Razão cíclica")
+    plt.ylabel("Tensão de limiar (mV)")
+    #plt.title("Heatmap (sem interpolação)"+suu)
 
 plt.show()

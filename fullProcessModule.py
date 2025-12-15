@@ -4,7 +4,6 @@ import matplotlib.pyplot as plt
 from PyLTSpice import SimRunner, SpiceEditor, LTspice  
 import ltspice
 from pathlib import Path
-from LTSpiceCleaner import Clean
 
 def RunLTSPiceFrFr(circuit,valueChanges):
     asc_path = Path(__file__).parent / circuit
@@ -23,21 +22,7 @@ def RunLTSpice(circuit,nodeNames,valueChanges:dict={},run:bool=True):
         try:
             raw_path=RunLTSPiceFrFr(circuit,valueChanges)
         except:
-            print("--------------------------First dint work--------------------------")
-            Clean()
-            try:
-                newValueChanges={key:val for key,val in valueChanges.items()}
-                newValueChanges["R_DEBUG"]="1m"
-                raw_path=RunLTSPiceFrFr(circuit,newValueChanges)
-            except:
-                print("--------------------------Second dint work--------------------------")
-                Clean()
-                try:
-                    newValueChanges={key:val for key,val in valueChanges.items()}
-                    newValueChanges["R_DEBUG"]="1"
-                    raw_path=RunLTSPiceFrFr(circuit,newValueChanges)
-                except:
-                    print("--------------------------Pau no seu cu piranha--------------------------")
+            return
     else: raw_path=circuit.split(".")[0]+"_1.raw"
 
     l = ltspice.Ltspice(raw_path)
@@ -88,6 +73,7 @@ class Module:
         self.amp=self.lux*luxToAmpConverter
         self.numPackets=numPackets
         self.otherWaves=[]
+        self.inputWave=[]
         if len(manualAmplitudes)>0:
             if manualAmplitudes[0]>=0: self.amp=manualAmplitudes[0]
             try:
@@ -118,8 +104,8 @@ class Module:
 
     # -------------------------------- Modulação --------------------------------
     
-    def GenerateData(self,dataType):
-        self.inputData=[0] # Primeiro bit é sempre descartado para esperar passar o transitório do circuito
+    def GenerateData(self,dataType=3):
+        inputData=[0] # Primeiro bit é sempre descartado para esperar passar o transitório do circuito
         for _ in range(self.numPackets):
             # Geração de dados VPPM
             data=[0] # O primeiro bit de cada pacote é o de referencia para a demodulação
@@ -137,11 +123,12 @@ class Module:
                 else:
                     for _ in range(self.numBits):
                         data.append(random.randint(0,1))
-            for bit in data: self.inputData.append(bit)
+            for bit in data: inputData.append(bit)
+        return inputData
 
     # Gera a onda de sinal de corrente com dados VPPM
     @staticmethod
-    def VPPMGenerator(freq,bits,amp,noiseAmp,DC,numPointsPerPeriod):
+    def VPPMGenerator(freq,bits,amp,DC,numPointsPerPeriod):
         ys=[] # vetor de amplitudes
         T=1/freq # período
         ts=np.linspace(0,T*len(bits),numPointsPerPeriod*len(bits)) # vetor de tempos
@@ -153,19 +140,18 @@ class Module:
             # Vê na lista de dados, qual o dado desse bin
             try: infoBit=bits[int(vppmBin)]
             except: infoBit=bits[-1]
-            # Gera o ruído
-            noise=np.random.normal(0,noiseAmp)
 
             # De acordo com o bit desse bin, calcula a amplitude de acordo com a porcentagem do período já 
             #   foi percorrida, considerando o dutyCycle
             if infoBit==0:
-                if remainder>T*DC: ys.append(noise)
-                else: ys.append(amp+noise)
+                if remainder>T*DC: ys.append(0)
+                else: ys.append(amp)
             else:
-                if remainder<T*(1-DC): ys.append(noise)
-                else: ys.append(amp+noise)
+                if remainder<T*(1-DC): ys.append(0)
+                else: ys.append(amp)
+        power=np.mean(np.array(ys)**2)
 
-        return ts,ys
+        return ts,ys,power
 
     # -------------------------------- Demodulação --------------------------------
 
@@ -461,35 +447,64 @@ class Module:
                 if not iBit==oBit: errors+=1
             except: errors+=1
         return errors/(len(self.dataBits))
-
     
-    def Run(self,circuit,nodes,trigger=0,valueChanges:dict={},aditionalNoises=[]):
+    def GenerateInput(self):
+        # Create input wave
+        self.inputData=self.GenerateData()
+        self.inputTime,self.inputWave,self.pureWavePower=self.VPPMGenerator(self.freq,self.inputData,self.amp,self.dutyCycle,self.numPointsPerPeriod)
+        self.noisyInput=[max(y+np.random.normal(0,self.noiseAmp),0) for y in self.inputWave]
+    
+    def Run(self,circuit,nodes,trigger=0,valueChanges:dict={},aditionalNoises=[],LTSpiceInputDir="fullCircuitInput.txt"):
         '''
         dataType = Se os dados gerados devem ser 0101...(1) ou 00110011...(2) ou random(3)
         '''
+        
+        if len(self.inputWave)<1: self.GenerateInput()
 
-        # Create input wave
-        self.GenerateData(3)
-        ts,ys=self.VPPMGenerator(self.freq,self.inputData,self.amp,self.noiseAmp,self.dutyCycle,self.numPointsPerPeriod)
-        self.inputTime=ts
-        self.inputWave=ys
+        '''plt.figure()
+        plt.plot(self.inputTime,self.noisyInput)
+        plt.title("Main")
+        for aditionalNoise in aditionalNoises:
+            plt.figure()
+            plt.plot(self.inputTime,aditionalNoise)'''
 
         for aditionalNoise in aditionalNoises:
             for i in range(len(self.inputWave)):
-                self.inputWave[i]+=aditionalNoise[i]
-
+                self.noisyInput[i]+=aditionalNoise[i]
+        
+        '''plt.figure()
+        plt.plot(self.inputTime,self.noisyInput)
+        plt.title("All")
+        plt.show()'''
+        
+        onlyNoise=np.array(self.noisyInput)-np.array(self.inputWave)
+        onlyNoisePower=np.mean(onlyNoise**2)
+        self.SNR=self.pureWavePower/onlyNoisePower
+        
+        '''plt.figure()
+        dy=1.5*(10**(-6))
+        tss=[self.inputTime[0],self.inputTime[-1]]
+        plt.plot(self.inputTime,[val+dy for val in self.inputWave],label="Ideal")
+        plt.plot(tss,[dy,dy],c='k')
+        plt.plot(tss,[0,0],c='k')
+        plt.plot(tss,[-dy,-dy],c='k')
+        plt.plot(self.inputTime,self.noisyInput,label="Noisy")
+        plt.plot(self.inputTime,[val-dy for val in onlyNoise],label="Noise")
+        plt.title("SNR = "+str(round(self.SNR,3))+" / dB = "+str(round(20*np.log10(self.SNR),3)))
+        plt.legend()
+        plt.show()'''
             
         if True:
             # Save input to .txt
-            with open("fullCircuitInput.txt", "w") as f:
-                for t, v in zip(self.inputTime,self.inputWave):
+            with open(LTSpiceInputDir, "w") as f:
+                for t, v in zip(self.inputTime,self.noisyInput):
                     f.write(f"{t:.6e}\t{v:.6e}\n")
 
         if debugLog:
             plt.figure()
-            plt.plot([t*1000 for t in self.inputTime],self.inputWave,c='r')
-            maxAmp=max(self.inputWave)
-            minAmp=min(self.inputWave)
+            plt.plot([t*1000 for t in self.inputTime],self.noisyInput,c='r')
+            maxAmp=max(self.noisyInput)
+            minAmp=min(self.noisyInput)
             dA=maxAmp-minAmp
             for n in range((self.numBits+1)*self.numPackets+2):
                 periodTransition=n*1000/self.freq
@@ -498,10 +513,6 @@ class Module:
             plt.title("Onda de corrente gerada")
             plt.xlabel("Tempo (us)")
             plt.ylabel("Amplitude (A)")
-        plt.show()
-        # Cria uma versão da onda de entrada 
-        self.pureTs,self.pureYs=self.VPPMGenerator(self.freq,self.inputData,self.amp,0,self.dutyCycle,self.numPointsPerPeriod)
-
 
         # Run LTSpice
         if debugLog: print("Running LTSpice")
@@ -584,7 +595,7 @@ class Module:
         simStr+="/X="+str(self.X)
         simStr+="/Y="+str(self.Y)
 
-        return simStr,errors
+        return simStr,errors,self.SNR
 
 
 

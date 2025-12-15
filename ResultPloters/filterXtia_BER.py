@@ -2,7 +2,7 @@ import matplotlib.pyplot as plt
 import json
 import numpy as np
 
-with open("LTSpiceSimResults/result_TIA.json") as fs: data=json.load(fs)
+with open("LTSpiceSimResults/filterXtiaN2.json") as fs: data=json.load(fs)
 
 def GetValuesOfParameter(parameterName,turnToFloat=False):
     values=[]
@@ -52,15 +52,15 @@ def ExtractRoomBER(noiseAmp,dc,node):
 noiseAmps=GetValuesOfParameter("noise_amp")
 dcs=GetValuesOfParameter("dc")
 
-nodes=["V(compideal)","V(compideal)_Trig"]
-nodes=["V(compideal)_Trig"]
+nodes=["V(comp_filter)","V(comp_filter)_Trig","V(comp_tia)","V(comp_tia)_Trig"]
+nodes=["V(comp_filter)_Trig","V(comp_tia)_Trig"]
 
-for noiseAmp in noiseAmps:
+'''for noiseAmp in noiseAmps:
     for node in nodes:
         for DC in dcs:
             plt.figure()
             ExtractRoomBER(noiseAmp,DC,node)
-            plt.title("Noise: "+noiseAmp+" / DC = "+DC+" / "+node)
+            plt.title("Noise: "+noiseAmp+" / DC = "+DC+" / "+node)'''
 
 def ExtractRoomBER(noiseAmp,dc,node,ax):
     Z = np.zeros((len(yValues),len(xValues)))
@@ -103,13 +103,13 @@ for noiseAmp in noiseAmps:
             clb=fig.colorbar(ims,ax=ax)
             clb.set_label("BER")
             ax.set_title("Duty-Cicle: "+DC)
-        plt.tight_layout()
+        #plt.tight_layout()
         plt.suptitle("Noise: "+noiseAmp+" / "+node)
 
 
 amps=GetValuesOfParameter("sig_amp")
 
-nodes=["V(compideal)","V(compideal)_Trig"]
+nodes=["V(comp_filter)_Trig","V(comp_tia)_Trig"]
 for node in nodes:
     plt.figure()
     for dc in dcs:
@@ -124,9 +124,9 @@ for node in nodes:
                     xs.append(float(sigamp)*10**6)
         pairs=sorted(zip(xs, ys))  
         xs,ys=map(list,zip(*pairs))
-        plt.plot([x*45 for x in xs],ys,label="Razão cíclica = "+dc)
+        plt.plot(xs,ys,label="DC = "+dc)
     plt.title("BER x Amplitude de "+node)
-    plt.xlabel("Amplitude do sinal (mV)")
+    plt.xlabel("Amplitude do sinal (uA)")
     plt.ylabel("BER")
     plt.legend()
 

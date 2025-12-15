@@ -1,0 +1,7 @@
+filterXtia.json:
+    Foi feito sem ruido sem querer
+filterXtia2.json:
+    Foi feito com lmapada VPPM em 100kHz se não me engano (O filtro deixa passar essa freq, 
+    então os resultados são muito ruins) e está incompleto
+filterXtia3.json:
+    Está só com luminárias de iluminação (tirando a principal) -> Tá certo, mas incompleto

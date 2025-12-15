@@ -3,7 +3,7 @@ import numpy as np
 import json
 from matplotlib import cm
 
-def plot3D(data,zLims=[]):
+def plot3D(data,title="",zLims=[]):
     fig, ax = plt.subplots(subplot_kw={"projection": "3d"})
 
     X=[]
@@ -25,12 +25,14 @@ def plot3D(data,zLims=[]):
     Xm,Ym=np.meshgrid(X,Y)
 
     # Plot the surface.
-    surf = ax.plot_surface(Xm, Ym, Z, cmap=cm.coolwarm,
+    surf = ax.plot_surface(Xm, Ym, Z, cmap=cm.viridis,
                         linewidth=0, antialiased=False)
 
     # Add a color bar which maps values to colors.
     fig.colorbar(surf)
-
+    plt.title(title)
+    plt.xlabel("X (m)")
+    plt.ylabel("Y (m)")
 
     plt.figure()
 
@@ -51,10 +53,10 @@ def plot3D(data,zLims=[]):
             vmax=zLims[1]
         )
 
-    plt.colorbar(label="Z")
-    plt.xlabel("X")
-    plt.ylabel("Y")
-    plt.title("Heatmap (sem interpolação)")
+    plt.colorbar(label="Iluminância (lx)")
+    plt.xlabel("X (m)")
+    plt.ylabel("Y (m)")
+    plt.title(title)
 
 def sumResults(sufixes=["VPPM2","VPPM3","60Hz"]):
     with open("Simulator/luxResults.json") as fs: simDataT=json.load(fs)
@@ -66,8 +68,13 @@ def sumResults(sufixes=["VPPM2","VPPM3","60Hz"]):
     return simDataT
 
 with open("Simulator/luxResults.json") as fs: simData=json.load(fs)
+plot3D(simData)
+plt.show()
 with open("sunlight.json") as fs: sun=json.load(fs)
-#plot3D(simData)
+for suff in ["","VPPM2","VPPM3","60Hz"]:
+    with open("Simulator/luxResults"+suff+".json") as fs: simmi=json.load(fs)
+    plot3D(simmi,suff)
+plt.show()
 lamps=sumResults()
 
 al={}
@@ -82,6 +89,6 @@ for X_Distance in sun.keys():
 print("Max:",maxTotal)
 input()
 plot3D(lamps)
-plot3D(sun,[0,1000])
-plot3D(al,[0,1000])
+plot3D(sun,"",[0,1000])
+plot3D(al,"",[0,1000])
 plt.show()

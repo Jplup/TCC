@@ -2,21 +2,12 @@ import numpy as np
 import matplotlib.pyplot as plt
 import random
 
-xs = [3, 1, 2]
-ys = [4, 23, 111]
-
-pairs = sorted(zip(xs, ys))  
-xs, ys = map(list, zip(*pairs))
-
-print(xs)  
-print(ys) 
-
-input()
 
 def VPPMGenerator(freq,bits,amp,noiseAmp,DC,numPointsPerPeriod):
         ys=[] # vetor de amplitudes
         T=1/freq # período
-        ts=np.linspace(0,T*len(bits),numPointsPerPeriod*len(bits)) # vetor de tempos
+        #ts=np.linspace(0,T*len(bits),) # vetor de tempos
+        ts=np.arange(numPointsPerPeriod*len(bits))*(T/numPointsPerPeriod)
         # Para cada valor de tempo:
         for t in ts:
             # De acordo com o tempo, ve qual é o periodo do VPPM (vppmBin) e em qual ponto do período está 
@@ -31,35 +22,49 @@ def VPPMGenerator(freq,bits,amp,noiseAmp,DC,numPointsPerPeriod):
             # De acordo com o bit desse bin, calcula a amplitude de acordo com a porcentagem do período já 
             #   foi percorrida, considerando o dutyCycle
             if infoBit==0:
-                if remainder>T*DC: ys.append(noise)
-                else: ys.append(amp+noise)
+                if remainder>T*DC: ys.append((-amp/2)+noise)
+                else: ys.append((amp/2)+noise)
             else:
-                if remainder<T*(1-DC): ys.append(noise)
-                else: ys.append(amp+noise)
+                if remainder<T*(1-DC): ys.append((-amp/2)+noise)
+                else: ys.append((amp/2)+noise)
 
         return ts,ys
 
-# Parâmetros
+def PlotFFT(freq,bits,dc,label,offSet,noise=0):
+    # Parâmetros
+    t,x=VPPMGenerator(freq,bits,1,noise,dc,1000)
 
-t,x=VPPMGenerator(50000,[random.randint(0,1) for _ in range(100)],2,0,0.5,1000)
+    # FFT
+    N = len(x)
+    X = np.fft.fft(x)
+    freqs = np.fft.fftfreq(N, t[1]-t[0])
 
-t=[val-0.5 for val in t]
+    # Magnitude
+    X_mag = np.abs(X)/N
 
-# FFT
-N = len(x)
-X = np.fft.fft(x)
-freqs = np.fft.fftfreq(N, 1/(50000*1000))
+    # Apenas frequências positivas
+    mask = freqs >= 0
 
-# Magnitude
-X_mag = np.abs(X)/N
+    plt.plot(freqs[mask],[val+offSet for val in X_mag[mask]],label=label)
 
-# Apenas frequências positivas
-mask = freqs >= 0
+bits=[random.randint(0,1) for _ in range(100)]
+'''PlotFFT(50000,bits,0.5,"Rand DC=0.5",0)   
+PlotFFT(50000,bits,0.2,"Rand DC=0.2",0.2) 
+PlotFFT(50000,bits,0.8,"Rand DC=0.8",-0.2)'''
+bits=[0 for _ in range(100)]  
+'''PlotFFT(50000,bits,0.5,"0s DC=0.5",0)    
+PlotFFT(50000,bits,0.2,"0s DC=0.2",0.5)  
+PlotFFT(50000,bits,0.8,"0s DC=0.8",-0.5)'''
+bits=[random.randint(0,1) for _ in range(100)]
+PlotFFT(50000,bits,0.5,"50k",0)
+PlotFFT(80000,bits,0.5,"80k",+0.2)
+PlotFFT(30000,bits,0.5,"30k",-0.2)
 
-plt.figure()
-plt.plot(freqs[mask], X_mag[mask])
-plt.title("FFT do sinal")
+plt.legend()
 plt.xlabel("Frequência (Hz)")
 plt.ylabel("Magnitude")
+plt.xlim(0, 2000e3)
 plt.grid(True)
+plt.title("FFT do sinal")
 plt.show()
+
