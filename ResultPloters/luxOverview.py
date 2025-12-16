@@ -58,7 +58,7 @@ def plot3D(data,title="",zLims=[]):
     plt.ylabel("Y (m)")
     plt.title(title)
 
-def sumResults(sufixes=["VPPM2","VPPM3","60Hz"]):
+def sumResults(sufixes=["VPPM2","ILU_CSD","ILU_CSE"]):
     with open("Simulator/luxResults.json") as fs: simDataT=json.load(fs)
     for sufix in sufixes:
         with open("Simulator/luxResults"+sufix+".json") as fs: simDataS=json.load(fs)
@@ -68,14 +68,16 @@ def sumResults(sufixes=["VPPM2","VPPM3","60Hz"]):
     return simDataT
 
 with open("Simulator/luxResults.json") as fs: simData=json.load(fs)
-plot3D(simData)
-plt.show()
 with open("sunlight.json") as fs: sun=json.load(fs)
-for suff in ["","VPPM2","VPPM3","60Hz"]:
+'''plot3D(simData)
+plt.show()
+for suff in ["","VPPM2","ILU_CSD","ILU_CSE"]:
     with open("Simulator/luxResults"+suff+".json") as fs: simmi=json.load(fs)
     plot3D(simmi,suff)
-plt.show()
+plt.show()'''
 lamps=sumResults()
+#plot3D(lamps)
+#plt.show()
 
 al={}
 maxTotal=0
@@ -88,7 +90,7 @@ for X_Distance in sun.keys():
     
 print("Max:",maxTotal)
 input()
-plot3D(lamps)
-plot3D(sun,"",[0,1000])
-plot3D(al,"",[0,1000])
+#plot3D(lamps)
+plot3D(sun,"Sun",[0,1000])
+plot3D(al,"All",[0,1000])
 plt.show()

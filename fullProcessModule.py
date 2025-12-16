@@ -38,6 +38,7 @@ def RunLTSpice(circuit,nodeNames,valueChanges:dict={},run:bool=True):
 
 luxToAmpConverter=75*(10**(-9))
 debugLog=False
+numDummyBits=5
 
 class Module:
     def __init__(self,freq,numBits,numPointsPerPeriod,numSamples,dutyCycle,X,Y,lux=0,manualAmplitudes=[],numPackets=1):
@@ -105,7 +106,7 @@ class Module:
     # -------------------------------- Modulação --------------------------------
     
     def GenerateData(self,dataType=3):
-        inputData=[0] # Primeiro bit é sempre descartado para esperar passar o transitório do circuito
+        inputData=[0 for _ in range(numDummyBits)] # Primeiro bit é sempre descartado para esperar passar o transitório do circuito
         for _ in range(self.numPackets):
             # Geração de dados VPPM
             data=[0] # O primeiro bit de cada pacote é o de referencia para a demodulação
@@ -171,10 +172,10 @@ class Module:
     
     # Recebe os valores de tempo e amplitude e retorna os indexes do vetor onde acontecem as 
     #   transições de um período para o outro com detecção de borda de subida
-    def GetInterruptIndexesTrig(self,time,wave):
+    def GetInterruptIndexesTrig(self,time,wave,inverFirstTrigger=False):
         # É definido o index correspondente a 90% de um período como o ponto inicial para detectar a
         #   borda de subida (basicamente pula o primeiro bit)
-        inicialIndex=np.searchsorted(time,0.9/self.freq)
+        inicialIndex=np.searchsorted(time,(numDummyBits-0.1)/self.freq)
         interruptIndexesSuper=[] # Lista de listas de transições de período (uma lista para cada pacote)
         # Faz um loop dentro de todos os valores de tempo do primeiro pacote até achar a primeira borda de subida
         for i in range(int(len(wave)/self.numPackets)):
@@ -182,9 +183,14 @@ class Module:
                 previous=wave[i+inicialIndex]
                 current=wave[i+1+inicialIndex]
             except: return interruptIndexesSuper
-            if previous<1.65 and current>1.65 or current==1.65:
-                firstInterrupt=i+inicialIndex
-                break
+            if not inverFirstTrigger:
+                if previous<1.65 and current>1.65 or current==1.65 and previous<1.65:
+                    firstInterrupt=i+inicialIndex
+                    break
+            else:
+                if previous>1.65 and current<1.65 or current==1.65 and previous>1.65:
+                    firstInterrupt=i+inicialIndex
+                    break
 
         for p in range(self.numPackets):
             timeOfFirstInterrupt=time[firstInterrupt]
@@ -461,38 +467,10 @@ class Module:
         
         if len(self.inputWave)<1: self.GenerateInput()
 
-        '''plt.figure()
-        plt.plot(self.inputTime,self.noisyInput)
-        plt.title("Main")
-        for aditionalNoise in aditionalNoises:
-            plt.figure()
-            plt.plot(self.inputTime,aditionalNoise)'''
-
         for aditionalNoise in aditionalNoises:
             for i in range(len(self.inputWave)):
                 self.noisyInput[i]+=aditionalNoise[i]
         
-        '''plt.figure()
-        plt.plot(self.inputTime,self.noisyInput)
-        plt.title("All")
-        plt.show()'''
-        
-        onlyNoise=np.array(self.noisyInput)-np.array(self.inputWave)
-        onlyNoisePower=np.mean(onlyNoise**2)
-        self.SNR=self.pureWavePower/onlyNoisePower
-        
-        '''plt.figure()
-        dy=1.5*(10**(-6))
-        tss=[self.inputTime[0],self.inputTime[-1]]
-        plt.plot(self.inputTime,[val+dy for val in self.inputWave],label="Ideal")
-        plt.plot(tss,[dy,dy],c='k')
-        plt.plot(tss,[0,0],c='k')
-        plt.plot(tss,[-dy,-dy],c='k')
-        plt.plot(self.inputTime,self.noisyInput,label="Noisy")
-        plt.plot(self.inputTime,[val-dy for val in onlyNoise],label="Noise")
-        plt.title("SNR = "+str(round(self.SNR,3))+" / dB = "+str(round(20*np.log10(self.SNR),3)))
-        plt.legend()
-        plt.show()'''
             
         if True:
             # Save input to .txt
@@ -516,21 +494,22 @@ class Module:
 
         # Run LTSpice
         if debugLog: print("Running LTSpice")
-        outputWaves=RunLTSpice(circuit,nodes,valueChanges,True)
-
+        allNodes=[node for node in nodes["BER"]]
+        for node in nodes["Pot"]: allNodes.append(node)
+        outputWaves=RunLTSpice(circuit,allNodes,valueChanges,True)
 
         # Get only data bits
         dataBits=[]
-        for i in range(len(self.inputData)-1):
+        for i in range(len(self.inputData)-numDummyBits):
             remainder=i%(self.numBits+1)
             if remainder==0: pass
-            else: dataBits.append(self.inputData[i+1])
+            else: dataBits.append(self.inputData[i+numDummyBits])
         self.dataBits=dataBits
 
-        # Demodulation and BER calculation
+        # Demodulation and BER calculations
         time=outputWaves["t"]
         errors={}
-        for node in nodes:
+        for node in nodes["BER"]:
             wave=outputWaves[node]
             if trigger==0:
                 result=self.Demodulate(time,wave,node,"")
@@ -547,6 +526,42 @@ class Module:
                 resultTrig=self.Demodulate(time,wave,node+" trig","trig")
                 BERtrig=self.BER(resultTrig)
                 errors[node+"_Trig"]=BERtrig
+
+        
+        
+        # Potency calculations
+        potencies={}
+        onlyNoiseCurrent=np.array(self.noisyInput)-np.array(self.inputWave)
+        onlyNoisePowerCurrent=np.mean(onlyNoiseCurrent**2)
+        idealVoltageWave=[val*45000 for val in self.inputWave]
+        idealVoltageWave=np.interp(outputWaves["t"], self.inputTime, idealVoltageWave)
+        potencies["current_noise"]=float(onlyNoisePowerCurrent)
+        potencies["current_ideal"]=float(np.mean(np.array(self.inputWave)**2))
+        potencies["voltage_ideal"]=float(np.mean(np.array(idealVoltageWave)**2))
+        potencies["current_full"]=float(np.mean(np.array(self.noisyInput)**2))
+        DClessIdealVoltageWave=-idealVoltageWave+np.mean(idealVoltageWave)
+        #idealVoltageWave165=DClessIdealVoltageWave+1.65
+        potencies["voltage_ideal_0"]=float(np.mean(np.array(DClessIdealVoltageWave)**2))
+        #potencies["voltage_ideal_165"]=float(np.mean(np.array(idealVoltageWave165)**2))
+        for node in nodes["Pot"]:
+            if node=="V(tia)":
+                print("Is tia:",node)
+                onlyNoiseVoltage=np.array(outputWaves[node])-np.array(idealVoltageWave)
+                onlyNoisePowerVoltage=np.mean(onlyNoiseVoltage**2)
+                potencies[node+"_noise"]=float(onlyNoisePowerVoltage)
+                potencies[node+"_full"]=float(np.mean(np.array(outputWaves[node])**2))
+            else:
+                print("Is not tia:",node)
+                DClessWave=np.array(outputWaves[node])-np.mean(outputWaves[node])
+                onlyNoiseVoltage=DClessIdealVoltageWave-DClessWave
+                onlyNoisePowerVoltage=np.mean(onlyNoiseVoltage**2)
+                potencies[node+"_noise"]=float(onlyNoisePowerVoltage)
+                potencies[node+"_full"]=float(np.mean(DClessWave**2))
+
+                '''onlyNoiseVoltage=np.array(outputWaves[node])-idealVoltageWave165
+                onlyNoisePowerVoltage=np.mean(onlyNoiseVoltage**2)
+                potencies[node+"_noise2"]=float(onlyNoisePowerVoltage)
+                potencies[node+"_full2"]=float(np.mean(np.array(outputWaves[node])**2))'''
             
         
         # Print results
@@ -555,36 +570,6 @@ class Module:
             for label,value in errors.items():
                 print(f"{label:<{maxLen}} : {value}")
             plt.show()
-        
-
-
-        '''if debugLog:
-            plt.figure()
-            plt.title("Comparação entre ondas com e sem PGA (gain"+str(int(gain))+") e sat")
-            plt.plot([t*1000 for t in time],outputWaves["V(pga)"],c='r',label="PGA")
-            plt.plot([t*1000 for t in time],outputWaves["V(filtered)"],c='b',label="Filtered")
-            plt.plot([t*1000 for t in time],outputWaves["V(sat)"],c='g',label="Sat")
-            for n in range((self.numBits+1)*self.numPackets+2):
-                periodTransition=(1/self.freq)*n*1000
-                plt.plot([periodTransition,periodTransition],[-0.1,1.1],'--',c='k')
-            plt.legend()
-            plt.grid("true")
-            plt.xlabel("Tempo (us)")
-
-        if debugLog:
-            print("Resultado da demodulação:",result)
-            plt.figure()
-            plt.title("Comparação entre ondas de input e output")
-            plt.plot([t*1000 for t in self.inputTime],self.NormalizeWave(self.inputWave),c='r',label="Input")
-            plt.plot([t*1000 for t in time],self.NormalizeWave(filtered),c='b',label="Output")
-            for n in range((self.numBits+1)*self.numPackets+2):
-                periodTransition=(1/self.freq)*n*1000
-                plt.plot([periodTransition,periodTransition],[-0.1,1.1],'--',c='k')
-            plt.legend()
-            plt.grid("true")
-            plt.xlabel("Tempo (us)")'''
-
-        
 
         simStr="n_samples="+str(self.numSamples)
         simStr+="/dc="+str(self.dutyCycle)
@@ -595,7 +580,7 @@ class Module:
         simStr+="/X="+str(self.X)
         simStr+="/Y="+str(self.Y)
 
-        return simStr,errors,self.SNR
+        return simStr,errors,potencies
 
 
 

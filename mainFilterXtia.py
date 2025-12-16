@@ -4,7 +4,7 @@ import json
 import time
 from LTSpiceCleaner import Clean
 
-debugLog=False
+debugLog=True
 
 # Parametros do sistema
 VPPMfreq=50000 # Frequência do sinal VPPM
@@ -74,12 +74,17 @@ dt=1 # Quanto tempo passou entre o começo e o final da última simulação
 cont=0 # Contador de simulações para prever quanto tempo vai demorar para a acabar
 
 circuit="circuit_filter.asc"
-resultDir="LTSpiceSimResults/filterXtiaN2.json"
+resultDir="LTSpiceSimResults/filterXtiaN1.json"
 maxSimsBeforeDeletion=1
-nodes=[
+BER_nodes=[
     "V(comp_filter)",
     "V(comp_tia)"
 ]
+Pot_nodes=[
+    "V(tia)",
+    "V(filtered)"
+]
+nodes={"BER":BER_nodes,"Pot":Pot_nodes}
 trigger=2
 
 '''obj=Module(VPPMfreq,1000,numPointsPerPeriod,numSamples,0.2,0,0,17.5,[-1,1e-8])
@@ -106,6 +111,7 @@ for noiseAmp in noises:
                     except: num=0
                     if debugLog:
                         print("Foram feitas",num,"simulações com os parametros da key:",key)
+
                     
                     # Print de progresso total
                     if not debugLog:
@@ -118,16 +124,31 @@ for noiseAmp in noises:
                     if num<numRepetitions:
                         # Full process run
                         obj.GenerateInput()
-                        addicionalNoises=GenerateOtherWaves(X_Distance,Y_Distance,obj)
-                        simStr,errors,SNR=obj.Run(circuit,nodes,trigger,{},addicionalNoises)
-                        errors["SNR"]=SNR
+                        #addicionalNoises=GenerateOtherWaves(X_Distance,Y_Distance,obj)
+                        simStr,errors,potencies=obj.Run(circuit,nodes,trigger)
+                        errors["Pot"]=potencies
+                        print("Erros:",errors)
+                        currentSNR=potencies["current_ideal"]/potencies["current_noise"]
+                        tiaSNR=potencies["voltage_ideal"]/potencies["V(tia)_noise"]
+                        filterSNRDCless=potencies["voltage_ideal_0"]/potencies["V(filtered)_noise"]
+                        #filterSNR165=potencies["voltage_ideal_0"]/potencies["V(filtered)_noise2"]
+                        '''print("SNRs:")
+                        print("  input:",currentSNR,"=",20*np.log10(currentSNR),"dB")
+                        print("  tia:",tiaSNR,"=",20*np.log10(tiaSNR),"dB")
+                        print("  filter DCless:",filterSNRDCless,"=",20*np.log10(filterSNRDCless),"dB")'''
+                        #print("  filter 165:",filterSNR165,"=",20*np.log10(filterSNR165),"dB")
+                        errors["SNR"]={
+                            "input":currentSNR,
+                            "tia":tiaSNR,
+                            "filter":filterSNRDCless
+                        }
                         # Save results
                         with open(resultDir) as fs: oldResults=json.load(fs)
                         try: oldResults[simStr].append(errors)
                         except: oldResults[simStr]=[errors]
                         with open(resultDir,'w') as fs: json.dump(oldResults,fs)
                         if debugLog: print("Resultados salvos")
-                        print("Erros:",[errors])
+                        
                         countToDeletion+=1
                     else:
                         if debugLog: print("Skiped")

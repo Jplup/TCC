@@ -17,7 +17,7 @@ XU6 165 N002 3v3 0 filtered OPAx350 ;§pnba IN+)IN-)VCC)VEE)OUT
 V1 mid 0 0.025
 V2 165 0 1.65
 R1 filtered 0 1000k
-.tran 0 0.0201 0 1u
+.tran 0 0.02014 0 1u
 .lib C:\Users\jpulu\OneDrive\Área de Trabalho\TCC\LTSpiceModels\sbom071e\OPAx350.LIB
 .lib LT1720.sub
 .backanno
