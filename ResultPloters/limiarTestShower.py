@@ -10,7 +10,6 @@ def extract(key, field):
 
 
 for suu in ["","_Trig"]:
-
     plt.figure()
     data = {}  # resultado final: {dc: {X: V}}
 
@@ -35,7 +34,10 @@ for suu in ["","_Trig"]:
 
     for ix, x in enumerate(data.keys()):
         for iy, y in enumerate(data[list(data.keys())[0]].keys()):
-            Z[iy,ix] = data[(x)][(y)]
+            if data[(x)][(y)]>0.8:
+                Z[iy,ix]=0
+            else:
+                Z[iy,ix] = data[(x)][(y)]
 
     X=np.array(X)
     Y=np.array(Y)
@@ -46,7 +48,8 @@ for suu in ["","_Trig"]:
         Z,
         origin='lower',
         extent=[min(X), max(X), min(Y), max(Y)],
-        aspect='auto',cmap="RdYlGn_r"
+        aspect='auto',cmap="RdYlGn_r",
+        vmax=1,vmin=0
     )
 
     plt.colorbar(label="BER")

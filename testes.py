@@ -3,7 +3,7 @@ import matplotlib.pyplot as plt
 import random
 
 
-tempoEntrada=[0,1,2,3,4]
+'''tempoEntrada=[0,1,2,3,4]
 tempoSaida=np.linspace(0,4.5,20)
 ampEntrada=[0,1,0,1,0]
 novaAmp=np.interp(tempoSaida, tempoEntrada, ampEntrada)
@@ -11,9 +11,26 @@ novaAmp=np.interp(tempoSaida, tempoEntrada, ampEntrada)
 plt.plot(tempoEntrada,ampEntrada,label="Original")
 plt.plot(tempoSaida,novaAmp,label="Novo")
 plt.legend()
-plt.show()
+plt.show()'''
 
-'''
+'''import matplotlib.pyplot as plt
+import numpy as np
+
+x = np.random.rand(20)
+y = np.random.rand(20)
+
+plt.scatter(
+    x, y,
+    s=100,
+    marker='o',
+    facecolor='none',     # garante sem preenchimento
+    edgecolor='black',    # cor do contorno
+    linewidths=1.5
+)
+
+plt.show()'''
+
+
 def VPPMGenerator(freq,bits,amp,noiseAmp,DC,numPointsPerPeriod):
         ys=[] # vetor de amplitudes
         T=1/freq # período
@@ -54,15 +71,40 @@ def PlotFFT(freq,bits,dc,label,offSet,noise=0):
     X_mag = np.abs(X)/N
 
     # Apenas frequências positivas
-    mask = freqs >= 0
+    mask = freqs >= 1
 
     plt.plot(freqs[mask],[val+offSet for val in X_mag[mask]],label=label)
 
-bits=[random.randint(0,1) for _ in range(100)]
-PlotFFT(50000,bits,0.5,"Rand DC=0.5",0)   
-PlotFFT(50000,bits,0.2,"Rand DC=0.2",0.2) 
-PlotFFT(50000,bits,0.8,"Rand DC=0.8",-0.2)
-bits=[0 for _ in range(100)]  
+    return t,x
+
+bits=[random.randint(0,1) for _ in range(1000)]
+#bits=[0 for _ in range(1000)]
+
+plt.figure()
+t,x=PlotFFT(50000,bits,0.5,"Rand DC=0.5",0)   
+t1,x1=PlotFFT(50000,bits,0.2,"Rand DC=0.2",0.05) 
+t2,x2=PlotFFT(50000,bits,0.8,"Rand DC=0.8",-0.05)
+plt.legend()
+plt.xlabel("Frequência (Hz)")
+plt.ylabel("Magnitude")
+plt.xlim(0,2000e3)
+plt.grid(True)
+plt.title("FFT do sinal")
+plt.xscale("log")
+
+
+plt.figure()
+plt.plot(t,x)
+plt.title("DE = 0.5")
+plt.figure()
+plt.plot(t1,x1)
+plt.title("DE = 0.2")
+plt.figure()
+plt.plot(t2,x2)
+plt.title("DE = 0.8")
+plt.show()
+
+'''bits=[0 for _ in range(100)]  
 PlotFFT(50000,bits,0.5,"0s DC=0.5",0)    
 PlotFFT(50000,bits,0.2,"0s DC=0.2",0.5)  
 PlotFFT(50000,bits,0.8,"0s DC=0.8",-0.5)
@@ -70,13 +112,5 @@ bits=[random.randint(0,1) for _ in range(100)]
 PlotFFT(50000,bits,0.5,"50k",0)
 PlotFFT(80000,bits,0.5,"80k",+0.2)
 PlotFFT(30000,bits,0.5,"30k",-0.2)
-
-plt.legend()
-plt.xlabel("Frequência (Hz)")
-plt.ylabel("Magnitude")
-plt.xlim(0, 2000e3)
-plt.grid(True)
-plt.title("FFT do sinal")
-plt.show()
-
 '''
+

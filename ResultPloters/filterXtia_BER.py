@@ -2,7 +2,9 @@ import matplotlib.pyplot as plt
 import json
 import numpy as np
 
-with open("LTSpiceSimResults/filterXtiaN2.json") as fs: data=json.load(fs)
+with open("LTSpiceSimResults/fullN2_3_2.json") as fs: data=json.load(fs)
+
+#with open("LTSpiceSimResults/fullN3_3000.json") as fs: data=json.load(fs)
 
 def GetValuesOfParameter(parameterName,turnToFloat=False):
     values=[]
@@ -19,41 +21,13 @@ yValues=GetValuesOfParameter("Y",True)
 # {"n_samples=10/dc=0.2/n_bits=1000/sig_amp=1.3e-06/noise_amp=0.0/lux=17.29/X=0.0/Y=0.0": 
 #       [{"V(compideal)": 0.508, "V(compideal)_Trig": 0.0}],
 
-def ExtractRoomBER(noiseAmp,dc,node):
-    Z = np.zeros((len(yValues),len(xValues)))
-    for ix,x in enumerate(xValues):
-        for iy,y in enumerate(yValues):
-            for key in data.keys():
-                xValue=float(key.split("X=")[1].split("/")[0])
-                yValue=float(key.split("Y=")[1].split("/")[0])
-                DC=key.split("dc=")[1].split("/")[0]
-                noise=key.split("noise_amp=")[1].split("/")[0]
-                if xValue==x and yValue==y and DC==dc and noise==noiseAmp:
-                    Z[iy,ix]=data[key][0][node]
-                    break
-
-    X=np.array(xValues)
-    Y=np.array(yValues)
-
-    plt.imshow(
-        Z,
-        origin='lower',
-        extent=[min(X), max(X), min(Y), max(Y)],
-        aspect='auto',
-        vmin=0,
-        vmax=1,
-        cmap="RdYlGn_r"
-    )
-
-    plt.colorbar(label="BER")
-    plt.xlabel("X (m)")
-    plt.ylabel("Y (m)")
-
 noiseAmps=GetValuesOfParameter("noise_amp")
 dcs=GetValuesOfParameter("dc")
 
 nodes=["V(comp_filter)","V(comp_filter)_Trig","V(comp_tia)","V(comp_tia)_Trig"]
 nodes=["V(comp_filter)_Trig","V(comp_tia)_Trig"]
+nodes=["V(filtered)_Trig","V(tia)_Trig","V(pga)_Trig"]
+nodes=["V(filtered)_M_Trig","V(tia)_M_Trig","V(pga)_M_Trig"]
 
 '''for noiseAmp in noiseAmps:
     for node in nodes:
@@ -64,6 +38,10 @@ nodes=["V(comp_filter)_Trig","V(comp_tia)_Trig"]
 
 def ExtractRoomBER(noiseAmp,dc,node,ax):
     Z = np.zeros((len(yValues),len(xValues)))
+    maxVal=-1
+    minVal=2
+    meanVal=0
+    auxCount=0
     for ix,x in enumerate(xValues):
         for iy,y in enumerate(yValues):
             for key in data.keys():
@@ -73,7 +51,17 @@ def ExtractRoomBER(noiseAmp,dc,node,ax):
                 noise=key.split("noise_amp=")[1].split("/")[0]
                 if xValue==x and yValue==y and DC==dc and noise==noiseAmp:
                     Z[iy,ix]=data[key][0][node]
+                    ber=data[key][0][node]
+                    if maxVal<ber: maxVal=ber
+                    if minVal>ber: minVal=ber
+                    meanVal+=ber
+                    auxCount+=1
                     break
+
+    print("DC:",dc,"Node:",node)
+    print("   max:",round(maxVal,3))
+    print("   min:",round(minVal,3))
+    print("   maen:",round(meanVal/auxCount,3))
 
     X=np.array(xValues)
     Y=np.array(yValues)
@@ -96,7 +84,7 @@ def ExtractRoomBER(noiseAmp,dc,node,ax):
 
 for noiseAmp in noiseAmps:
     for node in nodes:
-        fig,axs=plt.subplots(1,3)
+        fig,axs=plt.subplots(1,3,figsize=(20,3.8))
         for iDC,DC in enumerate(dcs):
             ax=axs[iDC]
             ims=ExtractRoomBER(noiseAmp,DC,node,ax)
@@ -109,9 +97,9 @@ for noiseAmp in noiseAmps:
 
 amps=GetValuesOfParameter("sig_amp")
 
-nodes=["V(comp_filter)_Trig","V(comp_tia)_Trig"]
+#nodes=["V(comp_filter)_Trig","V(comp_tia)_Trig"]
 for node in nodes:
-    plt.figure()
+    plt.figure(figsize=(20,3.8))
     for dc in dcs:
         ys=[]
         xs=[]
